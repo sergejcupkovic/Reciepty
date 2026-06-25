@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+    .receipt-paper {
+        background: white;
+        padding: 30px;
+        white-space: pre-wrap;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        border: 1px solid #e0e0e0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/" class="btn btn-outline-primary mb-4 fw-medium">&larr; Nazad na račune</a>
+<div class="receipt-paper shadow-sm rounded">
+{{ receipt.invoice_text }}
+</div>
+{% endblock %}

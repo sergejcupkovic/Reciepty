@@ -1,0 +1,5 @@
+sr-invoice-parser
+Flask
+requests
+beautifulsoup4
+pytest

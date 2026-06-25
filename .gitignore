@@ -3,6 +3,21 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+#project planning
+project_architecture_plan.md
+
+# virtual environment
+.venv/
+venv/
+env/
+.env/
+
+#database
+data/.*db
+
+# test files
+tests/*.py
+
 # C extensions
 *.so
 
