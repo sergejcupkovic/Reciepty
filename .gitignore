@@ -13,7 +13,7 @@ env/
 .env/
 
 #database
-data/.*db
+data/*
 
 # test files
 tests/*.py
