@@ -3,20 +3,81 @@
 {% block extra_head %}
 <style>
     .receipt-paper {
-        background: white;
+        background: var(--bs-body-bg);
+        color: var(--bs-body-color);
         padding: 30px;
         white-space: pre-wrap;
         font-family: 'Courier New', Courier, monospace;
         font-size: 14px;
         line-height: 1.5;
-        border: 1px solid #e0e0e0;
+        border: 1px solid var(--bs-border-color);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<a href="/" class="btn btn-outline-primary mb-4 fw-medium">&larr; Nazad na račune</a>
-<div class="receipt-paper shadow-sm rounded">
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <a href="/" class="btn btn-outline-primary fw-medium">&larr; Nazad na račune</a>
+    {% if receipt.original_url %}
+    <a href="{{ receipt.original_url }}" target="_blank" class="btn btn-info text-white fw-medium">Originalni račun &nearr;</a>
+    {% endif %}
+</div>
+
+<div class="mb-3 d-flex align-items-center flex-wrap gap-2">
+    <label class="form-label mb-0 fw-semibold">Tagovi:</label>
+    {% if receipt.tags %}
+        {% set r_tags = receipt.tags.split(',') %}
+        {% for t in r_tags %}
+            {% set t_clean = t|trim %}
+            {% if t_clean %}
+            <span class="badge fs-6 shadow-sm" style="background-color: {{ tag_colors.get(t_clean, '#6c757d') }};">{{ t_clean }}</span>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+    <button type="button" class="btn btn-sm btn-outline-primary shadow-sm ms-2" data-bs-toggle="modal" data-bs-target="#assignTagModal">+ Dodaj/Skini tag</button>
+</div>
+
+<!-- Assign Tag Modal -->
+<div class="modal fade" id="assignTagModal" tabindex="-1" aria-labelledby="assignTagModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="assignTagModalLabel">Izaberi tagove</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body d-flex flex-wrap gap-2 justify-content-center">
+        {% set current_tags = (receipt.tags or '').split(',') | map('trim') | list %}
+        {% for tag_name, tag_color in tag_colors.items() %}
+        <button type="button" class="btn rounded-pill fw-semibold {% if tag_name in current_tags %}text-white shadow{% else %}text-dark bg-opacity-10{% endif %}" 
+                style="{% if tag_name in current_tags %}background-color: {{ tag_color }};{% else %}background-color: transparent; border: 2px solid {{ tag_color }}; color: {{ tag_color }} !important;{% endif %}"
+                onclick="toggleTag({{ receipt.id }}, '{{ tag_name }}')">
+            {{ tag_name }}
+        </button>
+        {% else %}
+        <p class="text-muted small">Nema dostupnih tagova.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleTag(id, tagValue) {
+    fetch('/toggle_tag/' + id, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            tag: tagValue
+        })
+    }).then(res => {
+        if(res.ok) window.location.reload();
+    }).catch(err => console.error(err));
+}
+</script>
+
+<div class="receipt-paper shadow-sm rounded {% if receipt.important %}border-danger border-3{% endif %}">
 {{ receipt.invoice_text }}
 </div>
 {% endblock %}

@@ -4,7 +4,10 @@
 <h1 class="mb-4">Moji Računi</h1>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <form method="GET" action="/" class="d-inline-block">
+    <form method="GET" action="/" class="d-inline-flex gap-2">
+        {% if tag_filter %}
+        <input type="hidden" name="tag_filter" value="{{ tag_filter }}">
+        {% endif %}
         <select name="month" class="form-select w-auto shadow-sm" onchange="this.form.submit()">
             {% for m in months %}
             <option value="{{ m }}" {% if m==selected_month %}selected{% endif %}>{{ m }}</option>
@@ -13,30 +16,170 @@
             <option disabled selected>No data</option>
             {% endif %}
         </select>
+        <input type="text" name="search" value="{{ search_query }}" class="form-control shadow-sm w-auto" placeholder="Pretraži po tekstu računa..." onchange="this.form.submit()">
     </form>
     <div class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 fs-6 px-3 py-2 rounded-pill">
         {{ "%.2f"|format(total_spent) }} RSD
     </div>
 </div>
 
-<form method="POST" action="/" class="mb-4 shadow-sm rounded">
-    <div class="input-group">
-        <input type="url" class="form-control form-control-lg border-0" name="url" placeholder="Upiši URL računa i klikni ENTER..." required autocomplete="off">
-        <button class="btn btn-primary px-4 fw-semibold" type="submit">Dodaj</button>
+<div class="mb-4 d-flex flex-wrap gap-2 align-items-center">
+    <span class="text-muted small fw-semibold me-2">Filteri:</span>
+    <a href="/?month={{ selected_month }}" class="btn btn-sm rounded-pill {% if not tag_filter %}btn-dark{% else %}btn-outline-secondary{% endif %}">Svi</a>
+    {% for tag in all_tags %}
+    <a href="/?tag_filter={{ tag.name }}&month={{ selected_month }}" class="btn btn-sm rounded-pill text-white" style="background-color: {{ tag.color }}; {% if tag_filter == tag.name %}box-shadow: 0 0 0 0.2rem rgba(0,0,0,0.25);{% endif %}">{{ tag.name }}</a>
+    {% endfor %}
+    <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle ms-1" style="width: 30px; height: 30px; padding: 0; line-height: 28px;" data-bs-toggle="modal" data-bs-target="#newTagModal" title="Dodaj novi tag">+</button>
+</div>
+
+<div class="mb-4 d-flex gap-2">
+    <form method="POST" action="/" class="shadow-sm rounded flex-grow-1 m-0">
+        <div class="input-group">
+            <input type="url" class="form-control form-control-lg" name="url" placeholder="Upiši URL računa i klikni ENTER..." required autocomplete="off">
+            <button class="btn btn-primary px-4 fw-semibold" type="submit">Dodaj</button>
+        </div>
+    </form>
+    <button type="button" class="btn btn-outline-secondary fw-semibold shadow-sm" data-bs-toggle="modal" data-bs-target="#manualEntryModal">
+        Ručni unos
+    </button>
+</div>
+
+<!-- New Tag Modal -->
+<div class="modal fade" id="newTagModal" tabindex="-1" aria-labelledby="newTagModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="POST" action="/add_tag">
+          <div class="modal-header">
+            <h5 class="modal-title" id="newTagModalLabel">Novi tag</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label">Ime taga</label>
+                <input type="text" name="name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Boja</label>
+                <input type="color" name="color" class="form-control form-control-color w-100" value="#0d6efd">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zatvori</button>
+            <button type="submit" class="btn btn-primary">Dodaj</button>
+          </div>
+      </form>
     </div>
-</form>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="manualEntryModal" tabindex="-1" aria-labelledby="manualEntryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="/">
+          <input type="hidden" name="manual_entry" value="true">
+          <div class="modal-header">
+            <h5 class="modal-title" id="manualEntryModalLabel">Ručni unos računa</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Naziv prodavnice</label>
+                    <input type="text" class="form-control" name="store_name" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Ukupan iznos (RSD)</label>
+                    <input type="number" step="0.01" class="form-control" name="total_amount" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Tag (izaberi jedan)</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for tag in all_tags %}
+                        <div>
+                            <input type="radio" class="btn-check manual-tag-radio" name="tags" value="{{ tag.name }}" id="tagCheck_{{ loop.index }}" autocomplete="off">
+                            <label class="btn rounded-pill fw-semibold manual-tag-label" for="tagCheck_{{ loop.index }}" style="border: 2px solid {{ tag.color }}; color: {{ tag.color }};" data-color="{{ tag.color }}">
+                                {{ tag.name }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <div class="form-check form-switch fs-5">
+                      <input class="form-check-input" type="checkbox" id="importantCheck" name="important">
+                      <label class="form-check-label fs-6 mt-1 ms-2" for="importantCheck">Važno</label>
+                    </div>
+                </div>
+            </div>
+            
+            <hr>
+            <h6>Stavke (opciono)</h6>
+            <div id="itemsContainer" class="d-flex flex-column gap-2 mb-3">
+                <!-- Items will be appended here -->
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItemRow()">+ Dodaj stavku</button>
+            
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Otkaži</button>
+            <button type="submit" class="btn btn-primary">Sačuvaj</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function addItemRow() {
+    const container = document.getElementById('itemsContainer');
+    const row = document.createElement('div');
+    row.className = 'row g-2 align-items-center';
+    row.innerHTML = `
+        <div class="col-5"><input type="text" class="form-control form-control-sm" name="item_name[]" placeholder="Naziv" required></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_quantity[]" placeholder="Kol"></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_price[]" placeholder="Cena"></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_total[]" placeholder="Ukupno"></div>
+        <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.parentElement.parentElement.remove()">X</button></div>
+    `;
+    container.appendChild(row);
+}
+</script>
 
 <div class="d-flex flex-column gap-2">
     {% for r in receipts %}
-    <a href="/receipt/{{ r.id }}" class="card text-decoration-none text-dark shadow-sm border-0 transition-transform" style="transition: transform 0.2s;">
+    <div class="card bg-body-secondary shadow-sm transition-transform {% if r.important %}border-danger border-2{% else %}border-0{% endif %}" style="transition: transform 0.2s;" id="card-{{ r.id }}">
         <div class="card-body p-3">
-            <h5 class="card-title mb-1 fs-6">{{ r.company_name }}</h5>
-            <div class="d-flex justify-content-between text-secondary small">
-                <span>{{ r.invoice_date[:10] }}</span>
-                <span class="fw-bold text-dark">{{ "%.2f"|format(r.total_amount) }} RSD</span>
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <a href="/receipt/{{ r.id }}" class="text-decoration-none text-body flex-grow-1">
+                    <h5 class="card-title mb-0 fs-6 d-flex align-items-center gap-1 flex-wrap">
+                        {{ r.company_name }}
+                        {% if r.tags %}
+                        {% set r_tags = r.tags.split(',') %}
+                        {% for t in r_tags %}
+                            {% set t_clean = t|trim %}
+                            {% if t_clean %}
+                            <span class="badge" style="background-color: {{ tag_colors.get(t_clean, '#6c757d') }}; font-size: 0.7rem;">{{ t_clean }}</span>
+                            {% endif %}
+                        {% endfor %}
+                        {% endif %}
+                    </h5>
+                </a>
+                
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="form-check form-switch m-0" title="Označi kao važno">
+                        <input class="form-check-input" type="checkbox" onchange="updateReceipt({{ r.id }}, this)" {% if r.important %}checked{% endif %}>
+                    </div>
+                </div>
             </div>
+            <a href="/receipt/{{ r.id }}" class="text-decoration-none">
+                <div class="d-flex justify-content-between text-secondary small mt-2">
+                    <span>{{ r.invoice_date[:10] }}</span>
+                    <span class="fw-bold text-body">{{ "%.2f"|format(r.total_amount) }} RSD</span>
+                </div>
+            </a>
         </div>
-    </a>
+    </div>
     {% else %}
     <p class="text-center text-muted mt-4">Nema računa za ovaj mesec.</p>
     {% endfor %}
@@ -47,4 +190,44 @@
         transform: translateY(-2px);
     }
 </style>
+
+<script>
+document.querySelectorAll('.manual-tag-radio').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        document.querySelectorAll('.manual-tag-label').forEach(lbl => {
+            lbl.style.backgroundColor = 'transparent';
+            lbl.style.color = lbl.getAttribute('data-color');
+            lbl.classList.remove('text-white', 'shadow');
+        });
+        if (e.target.checked) {
+            const lbl = document.querySelector(`label[for="${e.target.id}"]`);
+            lbl.style.backgroundColor = lbl.getAttribute('data-color');
+            lbl.classList.add('text-white', 'shadow');
+        }
+    });
+});
+
+function updateReceipt(id, checkElem) {
+    const card = document.getElementById('card-' + id);
+    let important = checkElem.checked;
+    
+    if (important) {
+        card.classList.add('border-danger', 'border-2');
+        card.classList.remove('border-0');
+    } else {
+        card.classList.remove('border-danger', 'border-2');
+        card.classList.add('border-0');
+    }
+
+    fetch('/update/' + id, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            important: important
+        })
+    }).catch(err => console.error(err));
+}
+</script>
 {% endblock %}

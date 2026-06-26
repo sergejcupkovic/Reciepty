@@ -32,6 +32,21 @@ def init_db():
         )
         """)
         
+        columns = [col['name'] for col in cursor.execute("PRAGMA table_info(expenses)").fetchall()]
+        if 'tags' not in columns:
+            cursor.execute("ALTER TABLE expenses ADD COLUMN tags TEXT DEFAULT ''")
+        if 'original_url' not in columns:
+            cursor.execute("ALTER TABLE expenses ADD COLUMN original_url TEXT DEFAULT ''")
+        if 'important' not in columns:
+            cursor.execute("ALTER TABLE expenses ADD COLUMN important BOOLEAN DEFAULT 0")
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            color TEXT
+        )
+        """)
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,15 +60,15 @@ def init_db():
         """)
         connection.commit()
 
-def insert_expense(company_name, invoice_number, invoice_date, total_amount, items, invoice_text=""):
+def insert_expense(company_name, invoice_number, invoice_date, total_amount, items, invoice_text="", tags="", original_url="", important=False):
     """Inserts a new parsed receipt and its items into the database."""
     with get_connection() as connection:
         cursor = connection.cursor()
    
         cursor.execute("""
-        INSERT INTO expenses (company_name, invoice_number, invoice_date, total_amount, invoice_text)
-        VALUES (?, ?, ?, ?, ?)
-        """, (company_name, invoice_number, invoice_date, total_amount, invoice_text))
+        INSERT INTO expenses (company_name, invoice_number, invoice_date, total_amount, invoice_text, tags, original_url, important)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (company_name, invoice_number, invoice_date, total_amount, invoice_text, tags, original_url, important))
         expense_id = cursor.lastrowid
         
         for item in items:
@@ -65,13 +80,21 @@ def insert_expense(company_name, invoice_number, invoice_date, total_amount, ite
         connection.commit()
         return expense_id
 
-def get_all_expenses():
+def get_all_expenses(search_query=None):
     """Retrieves all expenses, including their connected items."""
     with get_connection() as connection:
         cursor = connection.cursor()
         
+        query = "SELECT * FROM expenses WHERE 1=1"
+        params = []
   
-        cursor.execute("SELECT * FROM expenses ORDER BY invoice_date DESC")
+        if search_query:
+            query_val = f"%{search_query}%"
+            query += " AND (invoice_text LIKE ? OR company_name LIKE ? OR tags LIKE ?)"
+            params.extend([query_val, query_val, query_val])
+            
+        query += " ORDER BY invoice_date DESC"
+        cursor.execute(query, tuple(params))
         expense_rows = cursor.fetchall()
         
         expenses = []
@@ -106,6 +129,52 @@ def get_expense_by_id(expense_id):
         expense['items'] = [dict(item_row) for item_row in cursor.fetchall()]
         
         return expense
+
+def get_all_tags():
+    """Retrieves all tags."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT * FROM tags ORDER BY name")
+        return [dict(row) for row in cursor.fetchall()]
+
+def add_tag(name, color):
+    """Adds a new tag."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        try:
+            cursor.execute("INSERT INTO tags (name, color) VALUES (?, ?)", (name, color))
+            connection.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+def update_expense(expense_id, important):
+    """Updates an existing expense's important flag."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("UPDATE expenses SET important = ? WHERE id = ?", (important, expense_id))
+        connection.commit()
+
+def toggle_tag(expense_id, tag_name):
+    """Toggles a tag on a specific expense."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT tags FROM expenses WHERE id = ?", (expense_id,))
+        row = cursor.fetchone()
+        if not row:
+            return
+            
+        current_tags_str = row['tags'] or ""
+        tags = [t.strip() for t in current_tags_str.split(',') if t.strip()]
+        
+        if tag_name in tags:
+            tags.remove(tag_name)
+        else:
+            tags.append(tag_name)
+            
+        new_tags_str = ",".join(tags)
+        cursor.execute("UPDATE expenses SET tags = ? WHERE id = ?", (new_tags_str, expense_id))
+        connection.commit()
 
 if __name__ == "__main__":
     init_db()

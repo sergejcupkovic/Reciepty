@@ -23,7 +23,8 @@ def scrape_and_save(url: str):
         invoice_date=invoice_date,
         total_amount=total_amount,
         items=items,
-        invoice_text=invoice_text
+        invoice_text=invoice_text,
+        original_url=url
     )
     
     print(f"Success! Saved to database as expense ID: {expense_id}")
