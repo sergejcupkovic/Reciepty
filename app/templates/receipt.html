@@ -17,10 +17,17 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <a href="/" class="btn btn-outline-primary fw-medium">&larr; Nazad na račune</a>
-    {% if receipt.original_url %}
-    <a href="{{ receipt.original_url }}" target="_blank" class="btn btn-info text-white fw-medium">Originalni račun &nearr;</a>
-    {% endif %}
+    <div>
+        <a href="/" class="btn btn-outline-primary fw-medium">&larr; Nazad na račune</a>
+    </div>
+    <div class="d-flex gap-2">
+        {% if receipt.original_url %}
+        <a href="{{ receipt.original_url }}" target="_blank" class="btn btn-info text-white fw-medium">Originalni račun &nearr;</a>
+        {% endif %}
+        <form action="/delete/{{ receipt.id }}" method="POST" class="m-0" onsubmit="return confirm('Da li si siguran da želiš da obrišeš ovaj račun?');">
+            <button type="submit" class="btn btn-danger fw-medium">Obriši</button>
+        </form>
+    </div>
 </div>
 
 <div class="mb-3 d-flex align-items-center flex-wrap gap-2">
@@ -75,6 +82,35 @@ function toggleTag(id, tagValue) {
         if(res.ok) window.location.reload();
     }).catch(err => console.error(err));
 }
+
+function addItemRow() {
+    const container = document.getElementById('itemsContainer');
+    const row = document.createElement('div');
+    row.className = 'row g-2 align-items-center';
+    row.innerHTML = `
+        <div class="col-5"><input type="text" class="form-control form-control-sm" name="item_name[]" placeholder="Naziv" required></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_quantity[]" placeholder="Kol"></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_price[]" placeholder="Cena"></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_total[]" placeholder="Ukupno"></div>
+        <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.parentElement.parentElement.remove()">X</button></div>
+    `;
+    container.appendChild(row);
+}
+
+document.querySelectorAll('.manual-tag-radio').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        document.querySelectorAll('.manual-tag-label').forEach(lbl => {
+            lbl.style.backgroundColor = 'transparent';
+            lbl.style.color = lbl.getAttribute('data-color');
+            lbl.classList.remove('text-white', 'shadow');
+        });
+        if (e.target.checked) {
+            const lbl = document.querySelector(`label[for="${e.target.id}"]`);
+            lbl.style.backgroundColor = lbl.getAttribute('data-color');
+            lbl.classList.add('text-white', 'shadow');
+        }
+    });
+});
 </script>
 
 <div class="receipt-paper shadow-sm rounded {% if receipt.important %}border-danger border-3{% endif %}">

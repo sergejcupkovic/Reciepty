@@ -39,6 +39,12 @@ def init_db():
             cursor.execute("ALTER TABLE expenses ADD COLUMN original_url TEXT DEFAULT ''")
         if 'important' not in columns:
             cursor.execute("ALTER TABLE expenses ADD COLUMN important BOOLEAN DEFAULT 0")
+        if 'has_warranty' not in columns:
+            cursor.execute("ALTER TABLE expenses ADD COLUMN has_warranty BOOLEAN DEFAULT 0")
+        if 'original_currency' not in columns:
+            cursor.execute("ALTER TABLE expenses ADD COLUMN original_currency TEXT DEFAULT 'RSD'")
+        if 'original_amount' not in columns:
+            cursor.execute("ALTER TABLE expenses ADD COLUMN original_amount REAL DEFAULT 0.0")
 
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS tags (
@@ -60,15 +66,15 @@ def init_db():
         """)
         connection.commit()
 
-def insert_expense(company_name, invoice_number, invoice_date, total_amount, items, invoice_text="", tags="", original_url="", important=False):
+def insert_expense(company_name, invoice_number, invoice_date, total_amount, items, invoice_text="", tags="", original_url="", important=False, has_warranty=False, original_currency="RSD", original_amount=0.0):
     """Inserts a new parsed receipt and its items into the database."""
     with get_connection() as connection:
         cursor = connection.cursor()
    
         cursor.execute("""
-        INSERT INTO expenses (company_name, invoice_number, invoice_date, total_amount, invoice_text, tags, original_url, important)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (company_name, invoice_number, invoice_date, total_amount, invoice_text, tags, original_url, important))
+        INSERT INTO expenses (company_name, invoice_number, invoice_date, total_amount, invoice_text, tags, original_url, important, has_warranty, original_currency, original_amount)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (company_name, invoice_number, invoice_date, total_amount, invoice_text, tags, original_url, important, has_warranty, original_currency, original_amount))
         expense_id = cursor.lastrowid
         
         for item in items:
@@ -174,6 +180,51 @@ def toggle_tag(expense_id, tag_name):
             
         new_tags_str = ",".join(tags)
         cursor.execute("UPDATE expenses SET tags = ? WHERE id = ?", (new_tags_str, expense_id))
+        connection.commit()
+
+def update_warranty(expense_id, has_warranty):
+    """Updates an existing expense's warranty flag."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("UPDATE expenses SET has_warranty = ? WHERE id = ?", (has_warranty, expense_id))
+        connection.commit()
+
+def delete_expense(expense_id):
+    """Deletes an expense and its items."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT invoice_number FROM expenses WHERE id = ?", (expense_id,))
+        row = cursor.fetchone()
+        if row:
+            invoice_number = row['invoice_number']
+            cursor.execute("DELETE FROM items WHERE invoice_number = ?", (invoice_number,))
+            cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+            connection.commit()
+
+def update_manual_expense(expense_id, company_name, total_amount, tags, important, has_warranty, items, invoice_text, original_currency="RSD", original_amount=0.0):
+    """Updates a manual expense and its items."""
+    with get_connection() as connection:
+        cursor = connection.cursor()
+        cursor.execute("SELECT invoice_number FROM expenses WHERE id = ?", (expense_id,))
+        row = cursor.fetchone()
+        if not row:
+            return
+        invoice_number = row['invoice_number']
+        
+        cursor.execute("""
+        UPDATE expenses 
+        SET company_name = ?, total_amount = ?, tags = ?, important = ?, has_warranty = ?, invoice_text = ?, original_currency = ?, original_amount = ?
+        WHERE id = ?
+        """, (company_name, total_amount, tags, important, has_warranty, invoice_text, original_currency, original_amount, expense_id))
+        
+        cursor.execute("DELETE FROM items WHERE invoice_number = ?", (invoice_number,))
+        
+        for item in items:
+            cursor.execute("""
+            INSERT INTO items (invoice_number, name, quantity, price, total_price)
+            VALUES (?, ?, ?, ?, ?)
+            """, (invoice_number, item.get('name'), item.get('quantity'), item.get('price'), item.get('total_price')))
+            
         connection.commit()
 
 if __name__ == "__main__":

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Izmeni Račun</h1>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <form method="POST" action="/edit/{{ receipt.id }}">
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Naziv prodavnice</label>
+                    <input type="text" class="form-control" name="store_name" value="{{ receipt.company_name }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Valuta (kod originalnog unosa)</label>
+                    <select class="form-select" name="currency">
+                        <option value="RSD" {% if receipt.original_currency == 'RSD' %}selected{% endif %}>RSD</option>
+                        <option value="EUR" {% if receipt.original_currency == 'EUR' %}selected{% endif %}>EUR</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Ukupan iznos</label>
+                    <input type="number" step="0.01" class="form-control" name="total_amount" value="{% if receipt.original_currency == 'EUR' %}{{ receipt.original_amount }}{% else %}{{ receipt.total_amount }}{% endif %}" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Tag (izaberi jedan)</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% set current_tags = (receipt.tags or '').split(',') | map('trim') | list %}
+                        {% for tag in all_tags %}
+                        <div>
+                            <input type="radio" class="btn-check manual-tag-radio" name="tags" value="{{ tag.name }}" id="tagCheck_{{ loop.index }}" autocomplete="off" {% if tag.name in current_tags %}checked{% endif %}>
+                            <label class="btn rounded-pill fw-semibold manual-tag-label {% if tag.name in current_tags %}text-white shadow{% endif %}" for="tagCheck_{{ loop.index }}" style="border: 2px solid {{ tag.color }}; {% if tag.name in current_tags %}background-color: {{ tag.color }};{% else %}color: {{ tag.color }};{% endif %}" data-color="{{ tag.color }}">
+                                {{ tag.name }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-6 d-flex align-items-end gap-3">
+                    <div class="form-check form-switch fs-5">
+                      <input class="form-check-input" type="checkbox" id="importantCheck" name="important" {% if receipt.important %}checked{% endif %}>
+                      <label class="form-check-label fs-6 mt-1 ms-2" for="importantCheck">Važno</label>
+                    </div>
+                    <div class="form-check form-switch fs-5">
+                      <input class="form-check-input" type="checkbox" id="warrantyCheck" name="has_warranty" {% if receipt.has_warranty %}checked{% endif %}>
+                      <label class="form-check-label fs-6 mt-1 ms-2" for="warrantyCheck">Garancija</label>
+                    </div>
+                </div>
+            </div>
+            
+            <hr>
+            <h6>Stavke (opciono)</h6>
+            <div id="itemsContainer" class="d-flex flex-column gap-2 mb-3">
+                {% for item in receipt.items %}
+                <div class="row g-2 align-items-center">
+                    <div class="col-5"><input type="text" class="form-control form-control-sm" name="item_name[]" value="{{ item.name }}" placeholder="Naziv" required></div>
+                    <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_quantity[]" value="{{ item.quantity }}" placeholder="Kol"></div>
+                    <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_price[]" value="{% if receipt.original_currency == 'EUR' %}{{ item.price / 116.0 }}{% else %}{{ item.price }}{% endif %}" placeholder="Cena"></div>
+                    <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_total[]" value="{% if receipt.original_currency == 'EUR' %}{{ item.total_price / 116.0 }}{% else %}{{ item.total_price }}{% endif %}" placeholder="Ukupno"></div>
+                    <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.parentElement.parentElement.remove()">X</button></div>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItemRow()">+ Dodaj stavku</button>
+            
+            <div class="mt-4 d-flex justify-content-between">
+                <a href="/receipt/{{ receipt.id }}" class="btn btn-secondary">Otkaži</a>
+                <button type="submit" class="btn btn-primary">Sačuvaj promene</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function addItemRow() {
+    const container = document.getElementById('itemsContainer');
+    const row = document.createElement('div');
+    row.className = 'row g-2 align-items-center';
+    row.innerHTML = `
+        <div class="col-5"><input type="text" class="form-control form-control-sm" name="item_name[]" placeholder="Naziv" required></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_quantity[]" placeholder="Kol"></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_price[]" placeholder="Cena"></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_total[]" placeholder="Ukupno"></div>
+        <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.parentElement.parentElement.remove()">X</button></div>
+    `;
+    container.appendChild(row);
+}
+
+document.querySelectorAll('.manual-tag-radio').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        document.querySelectorAll('.manual-tag-label').forEach(lbl => {
+            lbl.style.backgroundColor = 'transparent';
+            lbl.style.color = lbl.getAttribute('data-color');
+            lbl.classList.remove('text-white', 'shadow');
+        });
+        if (e.target.checked) {
+            const lbl = document.querySelector(`label[for="${e.target.id}"]`);
+            lbl.style.backgroundColor = lbl.getAttribute('data-color');
+            lbl.classList.add('text-white', 'shadow');
+        }
+    });
+});
+</script>
+{% endblock %}

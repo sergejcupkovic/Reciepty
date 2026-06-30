@@ -8,6 +8,9 @@
         {% if tag_filter %}
         <input type="hidden" name="tag_filter" value="{{ tag_filter }}">
         {% endif %}
+        {% if warranty_filter %}
+        <input type="hidden" name="warranty_filter" value="true">
+        {% endif %}
         <select name="month" class="form-select w-auto shadow-sm" onchange="this.form.submit()">
             {% for m in months %}
             <option value="{{ m }}" {% if m==selected_month %}selected{% endif %}>{{ m }}</option>
@@ -29,6 +32,7 @@
     {% for tag in all_tags %}
     <a href="/?tag_filter={{ tag.name }}&month={{ selected_month }}" class="btn btn-sm rounded-pill text-white" style="background-color: {{ tag.color }}; {% if tag_filter == tag.name %}box-shadow: 0 0 0 0.2rem rgba(0,0,0,0.25);{% endif %}">{{ tag.name }}</a>
     {% endfor %}
+    <a href="/?month={{ selected_month }}{% if tag_filter %}&tag_filter={{ tag_filter }}{% endif %}{% if not warranty_filter %}&warranty_filter=true{% endif %}" class="btn btn-sm rounded-pill {% if warranty_filter %}btn-dark{% else %}btn-outline-secondary{% endif %}">Samo sa garancijom</a>
     <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle ms-1" style="width: 30px; height: 30px; padding: 0; line-height: 28px;" data-bs-toggle="modal" data-bs-target="#newTagModal" title="Dodaj novi tag">+</button>
 </div>
 
@@ -88,8 +92,15 @@
                     <label class="form-label">Naziv prodavnice</label>
                     <input type="text" class="form-control" name="store_name" required>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label">Ukupan iznos (RSD)</label>
+                <div class="col-md-4">
+                    <label class="form-label">Valuta</label>
+                    <select class="form-select" name="currency">
+                        <option value="RSD" selected>RSD</option>
+                        <option value="EUR">EUR</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Ukupan iznos</label>
                     <input type="number" step="0.01" class="form-control" name="total_amount" required>
                 </div>
                 <div class="col-12">
@@ -105,10 +116,10 @@
                         {% endfor %}
                     </div>
                 </div>
-                <div class="col-md-6 d-flex align-items-end">
+                <div class="col-md-6 d-flex align-items-end gap-3">
                     <div class="form-check form-switch fs-5">
                       <input class="form-check-input" type="checkbox" id="importantCheck" name="important">
-                      <label class="form-check-label fs-6 mt-1 ms-2" for="importantCheck">Važno</label>
+                      <label class="form-check-label fs-6 mt-1 ms-2" for="importantCheck">GARANCIJA</label>
                     </div>
                 </div>
             </div>
@@ -131,59 +142,189 @@
 </div>
 
 <script>
-function addItemRow() {
-    const container = document.getElementById('itemsContainer');
+function addItemRow(containerId) {
+    const container = containerId ? document.getElementById(containerId) : document.getElementById('itemsContainer');
     const row = document.createElement('div');
     row.className = 'row g-2 align-items-center';
     row.innerHTML = `
         <div class="col-5"><input type="text" class="form-control form-control-sm" name="item_name[]" placeholder="Naziv" required></div>
-        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_quantity[]" placeholder="Kol"></div>
-        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_price[]" placeholder="Cena"></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_quantity[]" placeholder="Kol" oninput="calculateTotal(this)"></div>
+        <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_price[]" placeholder="Cena" oninput="calculateTotal(this)"></div>
         <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_total[]" placeholder="Ukupno"></div>
         <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.parentElement.parentElement.remove()">X</button></div>
     `;
     container.appendChild(row);
 }
+
+function calculateTotal(element) {
+    const row = element.closest('.row');
+    const qtyInput = row.querySelector('input[name="item_quantity[]"]');
+    const priceInput = row.querySelector('input[name="item_price[]"]');
+    const totalInput = row.querySelector('input[name="item_total[]"]');
+    
+    if (qtyInput && priceInput && totalInput) {
+        const qty = parseFloat(qtyInput.value) || 0;
+        const price = parseFloat(priceInput.value) || 0;
+        if (qtyInput.value !== '' && priceInput.value !== '') {
+            totalInput.value = (qty * price).toFixed(2);
+        } else if (qtyInput.value === '' && priceInput.value === '') {
+            totalInput.value = '';
+        }
+    }
+}
 </script>
 
 <div class="d-flex flex-column gap-2">
     {% for r in receipts %}
-    <div class="card bg-body-secondary shadow-sm transition-transform {% if r.important %}border-danger border-2{% else %}border-0{% endif %}" style="transition: transform 0.2s;" id="card-{{ r.id }}">
+    <div class="card bg-body-secondary shadow-sm transition-transform {% if r.important %}border-danger border-2{% else %}border-0{% endif %}" style="transition: transform 0.2s; cursor: pointer;" id="card-{{ r.id }}" onclick="window.location.href='/receipt/{{ r.id }}'">
         <div class="card-body p-3">
             <div class="d-flex justify-content-between align-items-start mb-1">
-                <a href="/receipt/{{ r.id }}" class="text-decoration-none text-body flex-grow-1">
-                    <h5 class="card-title mb-0 fs-6 d-flex align-items-center gap-1 flex-wrap">
+                <div class="d-flex align-items-center flex-wrap gap-2 flex-grow-1">
+                    <h5 class="card-title mb-0 fs-6">
                         {{ r.company_name }}
-                        {% if r.tags %}
-                        {% set r_tags = r.tags.split(',') %}
-                        {% for t in r_tags %}
-                            {% set t_clean = t|trim %}
-                            {% if t_clean %}
-                            <span class="badge" style="background-color: {{ tag_colors.get(t_clean, '#6c757d') }}; font-size: 0.7rem;">{{ t_clean }}</span>
-                            {% endif %}
-                        {% endfor %}
-                        {% endif %}
                     </h5>
-                </a>
+                    <div class="d-flex align-items-center flex-wrap gap-1" onclick="event.stopPropagation();">
+                        {% if r.tags %}
+                            {% set r_tags = r.tags.split(',') %}
+                            {% for t in r_tags %}
+                                {% set t_clean = t|trim %}
+                                {% if t_clean %}
+                                <span class="badge shadow-sm" style="background-color: {{ tag_colors.get(t_clean, '#6c757d') }}; font-size: 0.7rem;">{{ t_clean }}</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        <button type="button" class="btn btn-sm btn-outline-primary shadow-sm py-0" style="font-size: 0.7rem;" data-bs-toggle="modal" data-bs-target="#assignTagModal-{{ r.id }}">+ Dodaj/Skini tag</button>
+                    </div>
+                </div>
                 
-                <div class="d-flex gap-2 align-items-center">
-                    <div class="form-check form-switch m-0" title="Označi kao važno">
-                        <input class="form-check-input" type="checkbox" onchange="updateReceipt({{ r.id }}, this)" {% if r.important %}checked{% endif %}>
+                <div class="d-flex gap-2 align-items-center ms-3" onclick="event.stopPropagation();">
+                    {% if r.invoice_number and r.invoice_number.startswith('MANUAL_') %}
+                    <button type="button" class="btn btn-sm btn-warning py-0 px-2 fw-medium" data-bs-toggle="modal" data-bs-target="#editModal-{{ r.id }}">Izmeni</button>
+                    {% endif %}
+                    <form action="/delete/{{ r.id }}" method="POST" class="m-0" onsubmit="return confirm('Da li si siguran da želiš da obrišeš ovaj račun?');">
+                        <button type="submit" class="btn btn-sm btn-danger py-0 px-2 fw-medium">Obriši</button>
+                    </form>
+                    <div class="form-check form-switch m-0" title="Garancija">
+                        <label class="form-check-label small me-1" for="war-{{ r.id }}">GARANCIJA</label>
+                        <input class="form-check-input" id="war-{{ r.id }}" type="checkbox" onchange="updateReceipt({{ r.id }}, this)" {% if r.important %}checked{% endif %}>
                     </div>
                 </div>
             </div>
-            <a href="/receipt/{{ r.id }}" class="text-decoration-none">
-                <div class="d-flex justify-content-between text-secondary small mt-2">
-                    <span>{{ r.invoice_date[:10] }}</span>
-                    <span class="fw-bold text-body">{{ "%.2f"|format(r.total_amount) }} RSD</span>
-                </div>
-            </a>
+
+            <div class="d-flex justify-content-between text-secondary small mt-2">
+                <span>{{ r.invoice_date[:10] }}</span>
+                <span class="fw-bold text-body">
+                    {{ "%.2f"|format(r.total_amount) }} RSD
+                    {% if r.original_currency == 'EUR' %}
+                    <span class="text-muted fw-normal">({{ "%.2f"|format(r.original_amount) }} EUR)</span>
+                    {% endif %}
+                </span>
+            </div>
         </div>
     </div>
     {% else %}
     <p class="text-center text-muted mt-4">Nema računa za ovaj mesec.</p>
     {% endfor %}
 </div>
+
+{% for r in receipts %}
+<!-- Assign Tag Modal -->
+<div class="modal fade" id="assignTagModal-{{ r.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Izaberi tagove</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body d-flex flex-wrap gap-2 justify-content-center">
+        {% set current_tags = (r.tags or '').split(',') | map('trim') | list %}
+        {% for tag_name, tag_color in tag_colors.items() %}
+        <button type="button" class="btn rounded-pill fw-semibold {% if tag_name in current_tags %}text-white shadow{% else %}text-dark bg-opacity-10{% endif %}" 
+                style="{% if tag_name in current_tags %}background-color: {{ tag_color }};{% else %}background-color: transparent; border: 2px solid {{ tag_color }}; color: {{ tag_color }} !important;{% endif %}"
+                onclick="toggleTag({{ r.id }}, '{{ tag_name }}')">
+            {{ tag_name }}
+        </button>
+        {% else %}
+        <p class="text-muted small">Nema dostupnih tagova.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if r.invoice_number and r.invoice_number.startswith('MANUAL_') %}
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal-{{ r.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="/edit/{{ r.id }}">
+          <div class="modal-header">
+            <h5 class="modal-title">Izmeni račun</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Naziv prodavnice</label>
+                    <input type="text" class="form-control" name="store_name" value="{{ r.company_name }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Valuta</label>
+                    <select class="form-select" name="currency">
+                        <option value="RSD" {% if r.original_currency == 'RSD' %}selected{% endif %}>RSD</option>
+                        <option value="EUR" {% if r.original_currency == 'EUR' %}selected{% endif %}>EUR</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Ukupan iznos</label>
+                    <input type="number" step="0.01" class="form-control" name="total_amount" value="{% if r.original_currency == 'EUR' %}{{ r.original_amount }}{% else %}{{ r.total_amount }}{% endif %}" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Tag (izaberi jedan)</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% set current_tags = (r.tags or '').split(',') | map('trim') | list %}
+                        {% for tag in all_tags %}
+                        <div>
+                            <input type="radio" class="btn-check manual-tag-radio" name="tags" value="{{ tag.name }}" id="tagCheck_{{ r.id }}_{{ loop.index }}" autocomplete="off" {% if tag.name in current_tags %}checked{% endif %}>
+                            <label class="btn rounded-pill fw-semibold manual-tag-label {% if tag.name in current_tags %}text-white shadow{% endif %}" for="tagCheck_{{ r.id }}_{{ loop.index }}" style="border: 2px solid {{ tag.color }}; {% if tag.name in current_tags %}background-color: {{ tag.color }};{% else %}color: {{ tag.color }};{% endif %}" data-color="{{ tag.color }}">
+                                {{ tag.name }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-6 d-flex align-items-end gap-3">
+                    <div class="form-check form-switch fs-5">
+                      <input class="form-check-input" type="checkbox" id="importantCheck_{{ r.id }}" name="important" {% if r.important %}checked{% endif %}>
+                      <label class="form-check-label fs-6 mt-1 ms-2" for="importantCheck_{{ r.id }}">GARANCIJA</label>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <h6>Stavke (opciono)</h6>
+            <div id="itemsContainer_{{ r.id }}" class="d-flex flex-column gap-2 mb-3">
+                {% for item in r['items'] %}
+                <div class="row g-2 align-items-center">
+                    <div class="col-5"><input type="text" class="form-control form-control-sm" name="item_name[]" value="{{ item.name }}" placeholder="Naziv" required></div>
+                    <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_quantity[]" value="{{ item.quantity }}" placeholder="Kol" oninput="calculateTotal(this)"></div>
+                    <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_price[]" value="{% if r.original_currency == 'EUR' %}{{ item.price / 116.0 }}{% else %}{{ item.price }}{% endif %}" placeholder="Cena" oninput="calculateTotal(this)"></div>
+                    <div class="col-2"><input type="number" step="0.01" class="form-control form-control-sm" name="item_total[]" value="{% if r.original_currency == 'EUR' %}{{ item.total_price / 116.0 }}{% else %}{{ item.total_price }}{% endif %}" placeholder="Ukupno"></div>
+                    <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger w-100" onclick="this.parentElement.parentElement.remove()">X</button></div>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItemRow('itemsContainer_{{ r.id }}')">+ Dodaj stavku</button>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Otkaži</button>
+            <button type="submit" class="btn btn-primary">Sačuvaj promene</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
 
 <style>
     .transition-transform:hover {
@@ -229,5 +370,20 @@ function updateReceipt(id, checkElem) {
         })
     }).catch(err => console.error(err));
 }
+
+function toggleTag(id, tagValue) {
+    fetch('/toggle_tag/' + id, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            tag: tagValue
+        })
+    }).then(res => {
+        if(res.ok) window.location.reload();
+    }).catch(err => console.error(err));
+}
+
 </script>
 {% endblock %}
